@@ -115,7 +115,7 @@ impl PtrAndLen {
     ///   for the lifetime `'a`. It can be null or dangling if `self.len == 0`.
     pub unsafe fn as_ref<'a>(self) -> &'a [u8] {
         if self.ptr.is_null() {
-            assert_eq!(self.len, 0, "Non-empty slice with null data pointer");
+            debug_assert_eq!(self.len, 0, "Non-empty slice with null data pointer");
             &[]
         } else {
             // SAFETY:

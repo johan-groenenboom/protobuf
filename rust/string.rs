@@ -822,22 +822,24 @@ mod tests {
 
     #[test]
     fn proto_str_debug() {
-        assert_eq!(&format!("{:?}", test_proto_str(b"Hello There")), "\"Hello There\"");
-        assert_eq!(
+        use googletest::prelude::*;
+        assert_that!(&format!("{:?}", test_proto_str(b"Hello There")), eq("\"Hello There\""));
+        assert_that!(
             &format!(
                 "{:?}",
                 test_proto_str(b"Hello\xC0\x80 There\xE6\x83 Goodbye\xf4\x8d\x93\xaa"),
             ),
-            "\"Hello\\xC0\\x80 There\\xE6\\x83 Goodbye\\u{10d4ea}\"",
+            eq("\"Hello\\xC0\\x80 There\\xE6\\x83 Goodbye\\u{10d4ea}\"")
         );
     }
 
     #[test]
     fn proto_str_display() {
-        assert_eq!(&test_proto_str(b"Hello There").to_string(), "Hello There");
-        assert_eq!(
+        use googletest::prelude::*;
+        assert_that!(&test_proto_str(b"Hello There").to_string(), eq("Hello There"));
+        assert_that!(
             &test_proto_str(b"Hello\xC0\x80 There\xE6\x83 Goodbye\xf4\x8d\x93\xaa").to_string(),
-            "Hello�� There� Goodbye\u{10d4ea}",
+            eq("Hello�� There� Goodbye\u{10d4ea}")
         );
     }
 
