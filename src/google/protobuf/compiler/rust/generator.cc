@@ -23,6 +23,7 @@
 #include "google/protobuf/compiler/code_generator.h"
 #include "google/protobuf/compiler/cpp/names.h"
 #include "google/protobuf/compiler/rust/context.h"
+#include "google/protobuf/compiler/rust/enum.h"
 #include "google/protobuf/compiler/rust/message.h"
 #include "google/protobuf/compiler/rust/naming.h"
 #include "google/protobuf/compiler/rust/relative_path.h"
@@ -286,6 +287,13 @@ bool RustGenerator::Generate(const FileDescriptor* file_desc,
       thunks_msg.printer().PrintRaw("\n");
     }
   }
+
+  for (int i = 0; i < file.desc().enum_type_count(); ++i) {
+    auto enum_ = file.WithDesc(file.desc().enum_type(i));
+    GenerateEnumDefinition(enum_);
+    enum_.printer().PrintRaw("\n");
+  }
+
   if (file_desc == files_in_current_crate.front()) {
     EmitClosingOfPackageModules(file.desc().package(), file);
   }

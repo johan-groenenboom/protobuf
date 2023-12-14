@@ -14,6 +14,7 @@
 #include "google/protobuf/compiler/cpp/names.h"
 #include "google/protobuf/compiler/rust/accessors/accessors.h"
 #include "google/protobuf/compiler/rust/context.h"
+#include "google/protobuf/compiler/rust/enum.h"
 #include "google/protobuf/compiler/rust/naming.h"
 #include "google/protobuf/compiler/rust/oneof.h"
 #include "google/protobuf/descriptor.h"
@@ -364,7 +365,7 @@ void GenerateRs(Context<Descriptor> msg) {
             msg.printer().PrintRaw("\n");
           }
         }},
-       {"nested_msgs",
+       {"nested_in_msg",
         [&] {
           // If we have no nested types or oneofs, bail out without emitting
           // an empty mod SomeMsg_.
@@ -381,6 +382,13 @@ void GenerateRs(Context<Descriptor> msg) {
                     GenerateRs(nested_msg);
                   }
                 }},
+               {"nested_enums",
+                [&] {
+                  for (int i = 0; i < msg.desc().enum_type_count(); ++i) {
+                    auto nested_enum = msg.WithDesc(msg.desc().enum_type(i));
+                    GenerateEnumDefinition(nested_enum);
+                  }
+                }},
                {"oneofs",
                 [&] {
                   for (int i = 0; i < msg.desc().real_oneof_decl_count(); ++i) {
@@ -392,6 +400,7 @@ void GenerateRs(Context<Descriptor> msg) {
                  #[allow(non_snake_case)]
                  pub mod $Msg$_ {
                    $nested_msgs$
+                   $nested_enums$
 
                    $oneofs$
                  }  // mod $Msg$_
@@ -539,7 +548,7 @@ void GenerateRs(Context<Descriptor> msg) {
           $oneof_externs$
         }  // extern "C" for $Msg$
 
-        $nested_msgs$
+        $nested_in_msg$
       )rs");
 
   if (msg.is_cpp()) {
