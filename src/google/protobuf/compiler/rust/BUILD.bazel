@@ -3,6 +3,7 @@
 ################################################################################
 
 load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_pkg//:mappings.bzl", "pkg_files", "strip_prefix")
 load("//build_defs:cpp_opts.bzl", "COPTS")
 
 cc_library(
@@ -42,6 +43,7 @@ cc_library(
         ":oneof",
         "//src/google/protobuf:protobuf_nowkt",
         "//src/google/protobuf/compiler/cpp:names",
+        "//upb_generator:mangle",
         "@com_google_absl//absl/log:absl_check",
         "@com_google_absl//absl/log:absl_log",
     ],
@@ -155,4 +157,15 @@ cc_library(
         "@com_google_absl//absl/log:absl_check",
         "@com_google_absl//absl/strings",
     ],
+)
+
+################################################################################
+# Distribution packaging
+################################################################################
+
+pkg_files(
+    name = "dist_files",
+    srcs = glob(["**/*"]),
+    strip_prefix = strip_prefix.from_root(""),
+    visibility = ["//src:__pkg__"],
 )

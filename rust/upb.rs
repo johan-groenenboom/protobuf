@@ -277,6 +277,10 @@ impl<'msg> MutatorMessageRef<'msg> {
     pub fn msg(&self) -> RawMessage {
         self.msg
     }
+
+    pub fn arena(&self) -> RawArena {
+        self.arena.raw()
+    }
 }
 
 pub fn copy_bytes_in_arena_if_needed_by_runtime<'msg>(
@@ -295,6 +299,24 @@ pub fn copy_bytes_in_arena_if_needed_by_runtime<'msg>(
         val.as_ptr().copy_to_nonoverlapping(start, val.len());
         &*(new_alloc as *mut _ as *mut [u8])
     }
+}
+
+/// Opaque struct containing a upb_MiniTable.
+///
+/// This wrapper is a workaround until stabilization of extern C types.
+#[repr(C)]
+pub struct RawMiniTable {
+    _data: [u8; 0],
+    _marker: std::marker::PhantomData<(*mut u8, ::std::marker::PhantomPinned)>,
+}
+
+extern "C" {
+    pub fn upb_Message_DeepCopy(
+        dst: RawMessage,
+        src: RawMessage,
+        mini_table: *const RawMiniTable,
+        arena: RawArena,
+    );
 }
 
 /// The raw type-erased pointer version of `RepeatedMut`.

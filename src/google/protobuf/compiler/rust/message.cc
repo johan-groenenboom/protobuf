@@ -7,6 +7,8 @@
 
 #include "google/protobuf/compiler/rust/message.h"
 
+#include <string>
+
 #include "absl/log/absl_check.h"
 #include "absl/log/absl_log.h"
 #include "absl/strings/string_view.h"
@@ -17,12 +19,17 @@
 #include "google/protobuf/compiler/rust/naming.h"
 #include "google/protobuf/compiler/rust/oneof.h"
 #include "google/protobuf/descriptor.h"
+#include "upb_generator/mangle.h"
 
 namespace google {
 namespace protobuf {
 namespace compiler {
 namespace rust {
 namespace {
+
+static std::string MinitableName(Context<Descriptor> msg) {
+  return upb::generator::MessageInit(msg.desc().full_name());
+}
 
 void MessageNew(Context<Descriptor> msg) {
   switch (msg.opts().kernel) {
@@ -124,12 +131,14 @@ void MessageExterns(Context<Descriptor> msg) {
               {"delete_thunk", Thunk(msg, "delete")},
               {"serialize_thunk", Thunk(msg, "serialize")},
               {"deserialize_thunk", Thunk(msg, "deserialize")},
+              {"copy_from_thunk", Thunk(msg, "copy_from")},
           },
           R"rs(
           fn $new_thunk$() -> $pbi$::RawMessage;
           fn $delete_thunk$(raw_msg: $pbi$::RawMessage);
           fn $serialize_thunk$(raw_msg: $pbi$::RawMessage) -> $pbr$::SerializedData;
           fn $deserialize_thunk$(raw_msg: $pbi$::RawMessage, data: $pbr$::SerializedData) -> bool;
+          fn $copy_from_thunk$(dst: $pbi$::RawMessage, src: $pbi$::RawMessage);
         )rs");
       return;
 
@@ -139,11 +148,13 @@ void MessageExterns(Context<Descriptor> msg) {
               {"new_thunk", Thunk(msg, "new")},
               {"serialize_thunk", Thunk(msg, "serialize")},
               {"deserialize_thunk", Thunk(msg, "parse")},
+              {"minitable", MinitableName(msg)},
           },
           R"rs(
           fn $new_thunk$(arena: $pbi$::RawArena) -> $pbi$::RawMessage;
           fn $serialize_thunk$(msg: $pbi$::RawMessage, arena: $pbi$::RawArena, len: &mut usize) -> $NonNull$<u8>;
           fn $deserialize_thunk$(data: *const u8, size: usize, arena: $pbi$::RawArena) -> Option<$pbi$::RawMessage>;
+          static $minitable$: $pbr$::RawMiniTable;
       )rs");
       return;
   }
@@ -161,6 +172,38 @@ void MessageDrop(Context<Descriptor> msg) {
   msg.Emit({{"delete_thunk", Thunk(msg, "delete")}}, R"rs(
     unsafe { $delete_thunk$(self.inner.msg); }
   )rs");
+}
+
+void MessageSettableValue(Context<Descriptor> msg) {
+  switch (msg.opts().kernel) {
+    case Kernel::kCpp:
+      msg.Emit({{"copy_from_thunk", Thunk(msg, "copy_from")}},
+               R"rs(
+            impl<'msg> $pb$::SettableValue<$Msg$> for $Msg$View<'msg> {
+              fn set_on<'dst>(
+                self, _private: $pb$::__internal::Private, mutator: $pb$::Mut<'dst, $Msg$>)
+                where $Msg$: 'dst {
+                unsafe { $copy_from_thunk$(mutator.inner.msg(), self.msg) };
+              }
+            }
+          )rs");
+      return;
+
+    case Kernel::kUpb:
+      msg.Emit({{"minitable", MinitableName(msg)}}, R"rs(
+        impl<'msg> $pb$::SettableValue<$Msg$> for $Msg$View<'msg> {
+          fn set_on<'dst>(
+            self, _private: $pb$::__internal::Private, mutator: $pb$::Mut<'dst, $Msg$>)
+            where $Msg$: 'dst {
+            unsafe { $pbr$::upb_Message_DeepCopy(
+              mutator.inner.msg(), self.msg, &$minitable$, mutator.inner.arena()) };
+          }
+        }
+      )rs");
+      return;
+  }
+
+  ABSL_LOG(FATAL) << "unreachable";
 }
 
 void GetterForViewOrMut(Context<FieldDescriptor> field, bool is_mut) {
@@ -325,70 +368,74 @@ void GenerateRs(Context<Descriptor> msg) {
     return;
   }
   msg.Emit(
-      {{"Msg", msg.desc().name()},
-       {"Msg::new", [&] { MessageNew(msg); }},
-       {"Msg::serialize", [&] { MessageSerialize(msg); }},
-       {"Msg::deserialize", [&] { MessageDeserialize(msg); }},
-       {"Msg::drop", [&] { MessageDrop(msg); }},
-       {"Msg_externs", [&] { MessageExterns(msg); }},
-       {"accessor_fns",
-        [&] {
-          for (int i = 0; i < msg.desc().field_count(); ++i) {
-            auto field = msg.WithDesc(*msg.desc().field(i));
-            msg.Emit({{"comment", FieldInfoComment(field)}}, R"rs(
+      {
+          {"Msg", msg.desc().name()},
+          {"Msg::new", [&] { MessageNew(msg); }},
+          {"Msg::serialize", [&] { MessageSerialize(msg); }},
+          {"Msg::deserialize", [&] { MessageDeserialize(msg); }},
+          {"Msg::drop", [&] { MessageDrop(msg); }},
+          {"Msg_externs", [&] { MessageExterns(msg); }},
+          {"accessor_fns",
+           [&] {
+             for (int i = 0; i < msg.desc().field_count(); ++i) {
+               auto field = msg.WithDesc(*msg.desc().field(i));
+               msg.Emit({{"comment", FieldInfoComment(field)}}, R"rs(
                  // $comment$
                )rs");
-            GenerateAccessorMsgImpl(field);
-            msg.printer().PrintRaw("\n");
-          }
-        }},
-       {"oneof_accessor_fns",
-        [&] {
-          for (int i = 0; i < msg.desc().real_oneof_decl_count(); ++i) {
-            GenerateOneofAccessors(
-                msg.WithDesc(*msg.desc().real_oneof_decl(i)));
-            msg.printer().PrintRaw("\n");
-          }
-        }},
-       {"accessor_externs",
-        [&] {
-          for (int i = 0; i < msg.desc().field_count(); ++i) {
-            GenerateAccessorExternC(msg.WithDesc(*msg.desc().field(i)));
-            msg.printer().PrintRaw("\n");
-          }
-        }},
-       {"oneof_externs",
-        [&] {
-          for (int i = 0; i < msg.desc().real_oneof_decl_count(); ++i) {
-            GenerateOneofExternC(msg.WithDesc(*msg.desc().real_oneof_decl(i)));
-            msg.printer().PrintRaw("\n");
-          }
-        }},
-       {"nested_msgs",
-        [&] {
-          // If we have no nested types or oneofs, bail out without emitting
-          // an empty mod SomeMsg_.
-          if (msg.desc().nested_type_count() == 0 &&
-              msg.desc().real_oneof_decl_count() == 0) {
-            return;
-          }
-          msg.Emit(
-              {{"Msg", msg.desc().name()},
-               {"nested_msgs",
-                [&] {
-                  for (int i = 0; i < msg.desc().nested_type_count(); ++i) {
-                    auto nested_msg = msg.WithDesc(msg.desc().nested_type(i));
-                    GenerateRs(nested_msg);
-                  }
-                }},
-               {"oneofs",
-                [&] {
-                  for (int i = 0; i < msg.desc().real_oneof_decl_count(); ++i) {
-                    GenerateOneofDefinition(
-                        msg.WithDesc(*msg.desc().real_oneof_decl(i)));
-                  }
-                }}},
-              R"rs(
+               GenerateAccessorMsgImpl(field);
+               msg.printer().PrintRaw("\n");
+             }
+           }},
+          {"oneof_accessor_fns",
+           [&] {
+             for (int i = 0; i < msg.desc().real_oneof_decl_count(); ++i) {
+               GenerateOneofAccessors(
+                   msg.WithDesc(*msg.desc().real_oneof_decl(i)));
+               msg.printer().PrintRaw("\n");
+             }
+           }},
+          {"accessor_externs",
+           [&] {
+             for (int i = 0; i < msg.desc().field_count(); ++i) {
+               GenerateAccessorExternC(msg.WithDesc(*msg.desc().field(i)));
+               msg.printer().PrintRaw("\n");
+             }
+           }},
+          {"oneof_externs",
+           [&] {
+             for (int i = 0; i < msg.desc().real_oneof_decl_count(); ++i) {
+               GenerateOneofExternC(
+                   msg.WithDesc(*msg.desc().real_oneof_decl(i)));
+               msg.printer().PrintRaw("\n");
+             }
+           }},
+          {"nested_msgs",
+           [&] {
+             // If we have no nested types or oneofs, bail out without emitting
+             // an empty mod SomeMsg_.
+             if (msg.desc().nested_type_count() == 0 &&
+                 msg.desc().real_oneof_decl_count() == 0) {
+               return;
+             }
+             msg.Emit({{"Msg", msg.desc().name()},
+                       {"nested_msgs",
+                        [&] {
+                          for (int i = 0; i < msg.desc().nested_type_count();
+                               ++i) {
+                            auto nested_msg =
+                                msg.WithDesc(msg.desc().nested_type(i));
+                            GenerateRs(nested_msg);
+                          }
+                        }},
+                       {"oneofs",
+                        [&] {
+                          for (int i = 0;
+                               i < msg.desc().real_oneof_decl_count(); ++i) {
+                            GenerateOneofDefinition(
+                                msg.WithDesc(*msg.desc().real_oneof_decl(i)));
+                          }
+                        }}},
+                      R"rs(
                  #[allow(non_snake_case)]
                  pub mod $Msg$_ {
                    $nested_msgs$
@@ -396,9 +443,12 @@ void GenerateRs(Context<Descriptor> msg) {
                    $oneofs$
                  }  // mod $Msg$_
                 )rs");
-        }},
-       {"accessor_fns_for_views", [&] { AccessorsForViewOrMut(msg, false); }},
-       {"accessor_fns_for_muts", [&] { AccessorsForViewOrMut(msg, true); }}},
+           }},
+          {"accessor_fns_for_views",
+           [&] { AccessorsForViewOrMut(msg, false); }},
+          {"accessor_fns_for_muts", [&] { AccessorsForViewOrMut(msg, true); }},
+          {"settable_impl", [&] { MessageSettableValue(msg); }},
+      },
       R"rs(
         #[allow(non_camel_case_types)]
         // TODO: Implement support for debug redaction
@@ -454,13 +504,7 @@ void GenerateRs(Context<Descriptor> msg) {
           }
         }
 
-        impl<'a> $pb$::SettableValue<$Msg$> for $Msg$View<'a> {
-          fn set_on<'b>(self, _private: $pb$::__internal::Private, _mutator: $pb$::Mut<'b, $Msg$>)
-          where
-            $Msg$: 'b {
-            todo!()
-          }
-        }
+        $settable_impl$
 
         #[derive(Debug)]
         #[allow(dead_code)]
@@ -573,6 +617,7 @@ void GenerateThunksCc(Context<Descriptor> msg) {
        {"delete_thunk", Thunk(msg, "delete")},
        {"serialize_thunk", Thunk(msg, "serialize")},
        {"deserialize_thunk", Thunk(msg, "deserialize")},
+       {"copy_from_thunk", Thunk(msg, "copy_from")},
        {"nested_msg_thunks",
         [&] {
           for (int i = 0; i < msg.desc().nested_type_count(); ++i) {
@@ -607,6 +652,10 @@ void GenerateThunksCc(Context<Descriptor> msg) {
         bool $deserialize_thunk$($QualifiedMsg$* msg,
                                  google::protobuf::rust_internal::SerializedData data) {
           return msg->ParseFromArray(data.data, data.len);
+        }
+
+        void $copy_from_thunk$($QualifiedMsg$* dst, const $QualifiedMsg$& src) {
+          dst->CopyFrom(src);
         }
 
         $accessor_thunks$

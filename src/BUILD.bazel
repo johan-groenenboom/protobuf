@@ -27,6 +27,7 @@ pkg_filegroup(
         "//src/google/protobuf/compiler/php:dist_files",
         "//src/google/protobuf/compiler/python:dist_files",
         "//src/google/protobuf/compiler/ruby:dist_files",
+        "//src/google/protobuf/compiler/rust:dist_files",
         "//src/google/protobuf/io:dist_files",
         "//src/google/protobuf/stubs:dist_files",
         "//src/google/protobuf/testing:dist_files",
