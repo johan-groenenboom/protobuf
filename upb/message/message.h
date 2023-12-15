@@ -39,6 +39,9 @@ void upb_Message_DeleteUnknown(upb_Message* msg, const char* data, size_t len);
 // Returns the number of extensions present in this message.
 size_t upb_Message_ExtensionCount(const upb_Message* msg);
 
+const upb_Message_Extension* upb_Message_ExtensionByIndex(
+    const upb_Message* msg, size_t index);
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif

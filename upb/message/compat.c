@@ -20,7 +20,8 @@
 const upb_Message_Extension* upb_Message_FindExtensionByNumber(
     const upb_Message* msg, uint32_t field_number) {
   size_t count = 0;
-  const upb_Message_Extension* ext = _upb_Message_Getexts(msg, &count);
+  const upb_Message_Extension* ext =
+      UPB_PRIVATE(_upb_Message_Getexts)(msg, &count);
 
   while (count--) {
     if (upb_MiniTableExtension_Number(ext->ext) == field_number) return ext;

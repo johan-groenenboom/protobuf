@@ -19,14 +19,12 @@
 #include "upb/message/internal/array.h"
 #include "upb/message/internal/extension.h"
 #include "upb/message/internal/map.h"
-#include "upb/message/internal/message.h"
 #include "upb/message/map.h"
 #include "upb/message/message.h"
 #include "upb/message/tagged_ptr.h"
 #include "upb/mini_table/extension.h"
 #include "upb/mini_table/field.h"
 #include "upb/mini_table/internal/field.h"
-#include "upb/mini_table/internal/message.h"
 #include "upb/mini_table/internal/size_log2.h"
 #include "upb/mini_table/message.h"
 #include "upb/mini_table/sub.h"
@@ -258,7 +256,8 @@ upb_Message* _upb_Message_Copy(upb_Message* dst, const upb_Message* src,
   }
   // Clone extensions.
   size_t ext_count;
-  const upb_Message_Extension* ext = _upb_Message_Getexts(src, &ext_count);
+  const upb_Message_Extension* ext =
+      UPB_PRIVATE(_upb_Message_Getexts)(src, &ext_count);
   for (size_t i = 0; i < ext_count; ++i) {
     const upb_Message_Extension* msg_ext = &ext[i];
     const upb_MiniTableField* field = &msg_ext->ext->UPB_PRIVATE(field);
