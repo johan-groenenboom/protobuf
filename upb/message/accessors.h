@@ -38,14 +38,14 @@
 extern "C" {
 #endif
 
+UPB_API_INLINE void upb_Message_ClearExtension(
+    upb_Message* msg, const upb_MiniTableExtension* e) {
+  UPB_PRIVATE(_upb_Message_ClearExtension)(msg, e);
+}
+
 UPB_API_INLINE void upb_Message_ClearField(upb_Message* msg,
-                                           const upb_MiniTableField* field) {
-  if (upb_MiniTableField_IsExtension(field)) {
-    const upb_MiniTableExtension* ext = (const upb_MiniTableExtension*)field;
-    _upb_Message_ClearExtensionField(msg, ext);
-  } else {
-    _upb_Message_ClearNonExtensionField(msg, field);
-  }
+                                           const upb_MiniTableField* f) {
+  UPB_PRIVATE(_upb_Message_ClearField)(msg, f);
 }
 
 UPB_API_INLINE void upb_Message_Clear(upb_Message* msg,

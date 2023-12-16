@@ -197,6 +197,7 @@ py_extension(
         "//upb:message_copy",
         "//upb:port",
         "//upb:reflection",
+        "//upb:reflection_internal",
         "//upb:text",
         "//upb:wire_reader",
         "//upb:wire_types",

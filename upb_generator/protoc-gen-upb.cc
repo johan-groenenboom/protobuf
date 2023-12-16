@@ -269,7 +269,7 @@ void GenerateExtensionInHeader(const DefPoolPair& pools, upb::FieldDefPtr ext,
   output(
       R"cc(
         UPB_INLINE void $0_clear_$1(struct $2* msg) {
-          _upb_Message_ClearExtensionField(msg, &$3);
+          upb_Message_ClearExtension(msg, &$3);
         }
       )cc",
       ExtensionIdentBase(ext), ext.name(), MessageName(ext.containing_type()),
@@ -409,7 +409,7 @@ void GenerateClear(upb::FieldDefPtr field, const DefPoolPair& pools,
       R"cc(
         UPB_INLINE void $0_clear_$1($0* msg) {
           const upb_MiniTableField field = $2;
-          _upb_Message_ClearNonExtensionField(msg, &field);
+          upb_Message_ClearField(msg, &field);
         }
       )cc",
       msg_name, resolved_name, FieldInitializer(pools, field, options));

@@ -14,6 +14,7 @@
 #include "python/repeated.h"
 #include "upb/message/copy.h"
 #include "upb/reflection/def.h"
+#include "upb/reflection/internal/field_def.h"
 #include "upb/reflection/message.h"
 #include "upb/text/encode.h"
 #include "upb/util/required_fields.h"
@@ -1333,9 +1334,10 @@ static PyObject* PyUpb_Message_Clear(PyUpb_Message* self) {
   Py_RETURN_NONE;
 }
 
-void PyUpb_Message_DoClearField(PyObject* _self, const upb_FieldDef* f) {
+static void PyUpb_Message_DoClearCommon(PyObject* _self,
+                                        const upb_FieldDef* f) {
   PyUpb_Message* self = (void*)_self;
-  PyUpb_Message_EnsureReified((PyUpb_Message*)self);
+  PyUpb_Message_EnsureReified(self);
 
   // We must ensure that any stub object is reified so its parent no longer
   // points to us.
@@ -1362,7 +1364,13 @@ void PyUpb_Message_DoClearField(PyObject* _self, const upb_FieldDef* f) {
   }
 
   Py_XDECREF(sub);
-  upb_Message_ClearFieldByDef(self->ptr.msg, f);
+}
+
+void PyUpb_Message_DoClearExtension(PyObject* _self, const upb_FieldDef* f) {
+  PyUpb_Message_DoClearCommon(_self, f);
+  PyUpb_Message* self = (void*)_self;
+  upb_Message* msg = self->ptr.msg;
+  upb_Message_ClearExtension(msg, _upb_FieldDef_ExtensionMiniTable(f));
 }
 
 static PyObject* PyUpb_Message_ClearExtension(PyObject* _self, PyObject* arg) {
@@ -1370,8 +1378,15 @@ static PyObject* PyUpb_Message_ClearExtension(PyObject* _self, PyObject* arg) {
   PyUpb_Message_EnsureReified(self);
   const upb_FieldDef* f = PyUpb_Message_GetExtensionDef(_self, arg);
   if (!f) return NULL;
-  PyUpb_Message_DoClearField(_self, f);
+  PyUpb_Message_DoClearExtension(_self, f);
   Py_RETURN_NONE;
+}
+
+static void PyUpb_Message_DoClearField(PyObject* _self, const upb_FieldDef* f) {
+  PyUpb_Message_DoClearCommon(_self, f);
+  PyUpb_Message* self = (void*)_self;
+  upb_Message* msg = self->ptr.msg;
+  upb_Message_ClearField(msg, upb_FieldDef_MiniTable(f));
 }
 
 static PyObject* PyUpb_Message_ClearField(PyObject* _self, PyObject* arg) {
