@@ -491,3 +491,7 @@ with info about your project (name and website) so we can add an entry for you.
 
     *   Website: https://github.com/ipfs/protons
     *   Extensions: 1186
+
+1. Thermofisher MSD Electron Microscopy
+   *    Website: https://thermofisher.com
+   *    Extensions: 1187
